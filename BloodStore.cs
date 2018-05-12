@@ -3,12 +3,12 @@ using System.Collections.Generic;
 
 namespace Symulacja_Cyfrowa
 {
-    public class BloodStore
+    public class BloodStore : Event
     {
-
-        private int _bloodLevel;
         public List<Blood> BloodStorageList = new List<Blood>();
-        public static readonly Random Rnd = new Random();
+        public static bool OrderFlag = false;
+        public static bool EmergencyFlag = false;
+        
         public static int GetRandomNumber() // function lock makes sure, that won't be a problem with generator
         {
             lock (Rnd)
@@ -18,53 +18,26 @@ namespace Symulacja_Cyfrowa
         }
         public BloodStore(int bloodLevel)
         {
-            _bloodLevel = bloodLevel;
+            BloodLevel = bloodLevel;
         }
-        public int BloodLevel
+        public int BloodLevel { get; set; }
+
+        public static void Sorted(List<Blood> bloodStorageList) // Sorting Storage
         {
-            get { return _bloodLevel; }
-            set
+            bloodStorageList.Sort((x, y) => x.ExpDate.CompareTo(y.ExpDate));
+        }
+        public void FillBlood(List<Event> scheduler)
+        {
+            for (int i = 0; i < 5; i++)
             {
-                _bloodLevel = value;
-                _bloodLevel = BloodLevel;
+                int time = Rnd.Next(1, 11); // Time from generator
+                BloodStorageList.Add(new Blood(time));
+                AddToScheduler(scheduler,new Utilisation(time+SystemTime,"aUT")); // Add to scheduler utilisation Event;
+                BloodLevel++;
             }
-        }
-        public void FillBlood(Blood[,] scheduler)
-        {
-            for (var i = 0; i < 20; i++)
-            {
-                AddToScheduler(scheduler,Blood.AddBlood(BloodStorageList),i); // Add to scheduler blood expDate; Function addBlood gives reference to created object type Blood
-            }
-        }
-        public void AddToScheduler(Blood[,] scheduler,Blood classRef, int index)
-        {
-                for (var x = 0; x < 10; x++)
-                {
-                    if (scheduler[x, BloodStorageList[index].ExpDate] != null) continue;
-                    scheduler[x, BloodStorageList[index].ExpDate] = classRef; break;
-                    // if scheduler [x,i] is empty it means, 
-                        // that in that unit of time there's no one task and Exception will be thrown 
-                        // if it's not empty the x will increase and locate in the free space of a matrix.
-                        // Scheduler contains references to object for each unit of time.
-                        // breaks for (x), which gives us information that we put an expDate in the correct unit of time.
-                }
-        }
-        public static void ShowScheduler(Blood[,] scheduler)
-        {
-            Console.Write("\n\nSCHEDULER: ");
-            for (var i = 0; i < 11; i++) // There might be size of the scheduler (defined is 50), but know I will use 11, because 10 is max expDate.
-            {
-                for (var j = 0; j < 10; j++)
-                {
-                    if (scheduler[j, i] != null)
-                    {
-                        Console.Write(scheduler[j, i].ExpDate + "\t");
-                    }
-                    else { }
-                }
-                Console.WriteLine();
-            }
-        }
+            Sorted(BloodStorageList);
+            Sorted(scheduler);
+        } // Filling Blood for the first Time
         public void ShowExpDate()
         {
             foreach (var blood in BloodStorageList)
@@ -72,76 +45,65 @@ namespace Symulacja_Cyfrowa
                 Console.Write(blood.ExpDate + " ");
             }
         }
-        public void NewDonnor(Blood [,]scheduler) 
+        public void Transfusion(PatientQueue patientQ, List<Event> scheduler)
         {
-            BloodLevel++; // increase bloodLevel in Storage
-            var classRef = Blood.AddBlood(BloodStorageList); // Gives reference to Object Blood which is inside of BloodStorage
-            AddToScheduler(scheduler, classRef, BloodStorageList.LastIndexOf(classRef)); // Adds expDate into the scheduler 
-        }
-        public void Transfusion(int x, PatientQueue patientQ, Blood[,] scheduler)
-        {
-            int counter = 0;
+            Console.Write("\n### TRANSFUSION ###\nBefore Transfusion: " + BloodLevel);
             var p1 = patientQ.RemovePatient();            // Take 1st patient from Queue and get him into var p1 
-            Console.Write("\n########## Need " + p1.BloodUnits + " blood units.. ##########");
-            for (int i = 0; i < 50; i++)
+            Console.Write("\tNeed " + p1.BloodUnits + " blood units..");
+            // Remodeling of scheduler, making UT units first in scheduler
+            SortedByType(scheduler);
+            for (int i = 0; i < p1.BloodUnits; i++)
             {
-                if (counter < p1.BloodUnits)
-                {
-                    for (int j = 0; j < 10; j++)
-                    {
-                        if ((scheduler[j, i] != null) && (counter < p1.BloodUnits))
-                        {
-                            var blood = scheduler[j, i]; // Take blood from scheduler
-                            scheduler[j, i] = null; // Remove blood from scheduler
-                            counter++;
-                            BloodStorageList.Remove(blood);
-                        }
-
-                    }
-                }
-                else break;
+                BloodStorageList.RemoveAt(0); // Removes blood Unit from the System
+                scheduler.RemoveAt(0); // Removes information about utilisation from Scheduler
             }
-            BloodLevel = BloodLevel - x; // Reduce BloodLevel
-            Console.WriteLine("\n########## Current blood level: " + BloodLevel + " ##########");
+            BloodLevel = BloodLevel - p1.BloodUnits; // Reduce BloodLevel
+            Console.WriteLine("\tAfter Transfusion: " + BloodLevel);
+            Sorted(scheduler);
         }
-        public void BloodTransport(int bloodUnits)
+        public static void NewOrder(List<Event> scheduler) // order on N blood units
         {
-            BloodLevel = BloodLevel + bloodUnits;
-            // Put Data (with expDate) into the Scheduler 
-        }
-        public void Utilisation(int bloodUnits)
-        {
-            BloodLevel = BloodLevel - bloodUnits;
-            //Remove Data (with expDate) from Scheduler
-            // Check how much blood left, if <= R, make an order on N blood units
-        }
-        public void NewOrder(int bloodNUnits,Blood [,] scheduler)             // order on N blood units
-        {
-            const int time_1 = 5; // T1 time
-            int timeToWait = 1; // GENERATOR
-
-            //Wait timeToWait units of time and then use AddBlood, and AddToScheduler functions
-            /*
-            for(int i=0; i<bloodNUnits; i++)
+            if (OrderFlag == false)
             {
-            var classRef = Blood.AddBlood(BloodStorageList, time_1); // Gives reference to Object Blood which is inside of BloodStorage
-            AddToScheduler(scheduler, classRef, BloodStorageList.LastIndexOf(classRef)); // Adds expDate into the scheduler 
-            */
-        }
-        public void EmergencyOrder(int bloodQUnits)             // order on Q blood units
-        {
-            const int time_2 = 4; // T2 time
-            int timeToWait = 1; // GENERATOR
-
-            // Wait timeToWait units of time and then use AddBlood, and AddToScheduler functions
-            /*
-            for(int i=0; i<bloodQUnits; i++)
-            {
-            var classRef = Blood.AddBlood(BloodStorageList, time_1); // Gives reference to Object Blood which is inside of BloodStorage
-            AddToScheduler(scheduler, classRef, BloodStorageList.LastIndexOf(classRef)); // Adds expDate into the scheduler 
+            Console.WriteLine("\n### NEW ORDER ###");
+            int timeG = 15; // Time from generator (Time of transport the New Order)
+            const int nUnits = 20;
+            BloodSupply temp = new BloodSupply(timeG, "BS", nUnits, false);
+            AddToScheduler(scheduler, temp);
+            Sorted(scheduler);
+            OrderFlag = true;
             }
-            */
         }
-
+        public static void EmergencyOrder(List<Event>scheduler)             // order on Q blood units
+        {
+            if(EmergencyFlag == false)
+            {
+            Console.WriteLine("\n### EMERGENCY ORDER ###");
+            const int timeG = 10; //  Time from generator(Time of transport the Emergency Order)
+            const int timeG1 = 50; // Time from generator(Time of restoring emergency order)
+            const int qUnits = 11;
+            BloodSupply temp = new BloodSupply(timeG,"BS",qUnits,true);
+            AddToScheduler(scheduler, temp);
+            ReturnBlood rest = new ReturnBlood(timeG1,"RB",timeG); // timeG is being used to track right units of blood to destroy
+            AddToScheduler(scheduler,rest);
+            Sorted(scheduler);
+            EmergencyFlag = true;
+            }
+        }
+        public void Begin(List<Event> scheduler, BloodStore bloodStorage, PatientQueue patientQ)
+        {
+            SystemTime = 0;
+            bloodStorage.FillBlood(scheduler); // initializes Blood into Storage and adds an ExpDate into scheduler
+            Console.WriteLine("\nPo sortowaniu: ");
+            bloodStorage.ShowExpDate();
+            NewDonnor donator = new NewDonnor(5,"ND");
+            NewPatient patient = new NewPatient(5,"NP");
+            for (int i = 0; i < 5; i++) donator.Execute(scheduler, bloodStorage, patientQ); // Gives new 5 Donnors
+            Sorted(scheduler);
+            Console.WriteLine("\nSCHEDULER: ");
+            ShowScheduler(scheduler);
+            for (int i = 0; i < 5; i++) patient.Execute(scheduler, bloodStorage,patientQ); // creates 5 patients to the Queue
+            patientQ.ShowQueue();
+        }
     }
 }

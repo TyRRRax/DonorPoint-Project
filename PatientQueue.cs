@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Symulacja_Cyfrowa
 {
-    public class PatientQueue
+    public class PatientQueue 
     {
         private int _bloodNeeded;
         public Queue<Patient> PatientQ = new Queue<Patient>();
@@ -16,19 +17,19 @@ namespace Symulacja_Cyfrowa
                 _bloodNeeded = BloodNeeded;
             }
         }
-        public void NewPatient()
+        public int BloodNeededFirst()
         {
-            var x = BloodStore.Rnd.Next(1, 6); // Patient needs 1-5 units of Blood
-            PatientQ.Enqueue(new Patient(x)); // new Patient who needs X blood units
-            BloodNeeded = BloodNeeded + x;
-            // if bloodNeeded > bloodLevel -> make an EmergencyOrder on Q bloodUnits
+            var temp = PatientQ.ElementAt(0);
+            return temp.BloodUnits;
         }
+
         public Patient RemovePatient()
         {
             var p1 = PatientQ.Dequeue();
             BloodNeeded = BloodNeeded - p1.BloodUnits;
             return p1;
         }
+
         public void ShowQueue()
         {
             int summ = 0;
